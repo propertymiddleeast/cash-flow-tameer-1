@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تحليل التدفق النقدي</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@400;700&display=swap');
+        body {
+            font-family: 'Noto Kufi Arabic', sans-serif;
+            background-color: #f3f4f6;
+            direction: rtl;
+            text-align: right;
+        }
+
+        /* تعديلات خاصة بالهاتف المحمول */
+        @media (max-width: 768px) {
+            .table-container {
+                overflow-x: auto;
+            }
+            .table-container table {
+                min-width: 600px; /* تحديد عرض أدنى للجدول لمنع تداخل الأعمدة */
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-4 sm:p-8">
+    <div class="max-w-4xl mx-auto bg-white rounded-xl shadow-lg p-6">
+        <h1 class="text-base font-bold text-gray-800 text-center mb-6">تحليل التدفق النقدي الحر</h1>
+        
+        <div class="relative w-full h-80">
+            <canvas id="cashFlowChart"></canvas>
+        </div>
+
+        <div class="flex justify-center gap-4 mt-4">
+            <button id="showLessBtn" class="bg-blue-500 hover:bg-blue-700 text-white  font-bold py-2 text-xs px-4 rounded transition-colors duration-300">
+                عرض المزيد
+            </button>
+            <button id="showMoreBtn" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 text-xs px-4 rounded transition-colors duration-300">
+                عرض أقل
+            </button>
+        </div>
+
+        <div class="mt-8">
+            <h2 class="text-base font-semibold text-gray-700 mb-4 text-center">جدول بيانات التدفقات النقدية</h2>
+            
+            <div class="table-container">
+                <table id="dataTable" class="w-full text-sm text-gray-500 rounded-lg overflow-hidden">
+                    <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 whitespace-nowrap">الفترة</th>
+                            <th scope="col" class="px-6 py-3 whitespace-nowrap">التدفق<br> النقدي الحر</th>
+                            <th scope="col" class="px-6 py-3 whitespace-nowrap">صافي التدفقات<br>النقدية التشغيلية</th>
+                            <th scope="col" class="px-6 py-3 whitespace-nowrap">النفقات الرأسمالية</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dataTableBody">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function initializeChartAndTable() {
+            const chartCanvas = document.getElementById('cashFlowChart');
+            const dataTableBody = document.getElementById('dataTableBody');
+            const showLessBtn = document.getElementById('showLessBtn');
+            const showMoreBtn = document.getElementById('showMoreBtn');
+            let currentDataCount = 8; // يبدأ بـ 8 فترات افتراضيًا
+            let cashFlowChart = null;
+
+            const fullData = {
+                labels: [ 'Q3-2023', 'Q4-2023', 'Q1-2024', 'Q2-2024', 'Q3-2024', 'Q4-2024', 'Q1-2025', 'Q2-2025'],
+                freeCashFlow: [ 61848990, 54355687, -18764921, -53261163, 43513365, 253506, 70764498, 1301589],
+                operatingCashFlow: [ 76565827, 63898852, -6884405, -34437476, 67022403, 40757619, 72773197, 3368805],
+                capitalExpenditures: [-14716837, -9543165, -11880516, -18823687, -23509038, -40504113, -2008699, -2067216]
+            };
+            
+            // دالة لتحديث الرسم البياني والجدول
+            function updateChartAndTable(dataCount) {
+                // اقتطاع البيانات من النهاية
+                const startIndex = fullData.labels.length - dataCount;
+                const slicedData = {
+                    labels: fullData.labels.slice(startIndex),
+                    freeCashFlow: fullData.freeCashFlow.slice(startIndex),
+                    operatingCashFlow: fullData.operatingCashFlow.slice(startIndex),
+                    capitalExpenditures: fullData.capitalExpenditures.slice(startIndex)
+                };
+
+                // تحديث الجدول
+                dataTableBody.innerHTML = '';
+                slicedData.labels.forEach((period, index) => {
+                    const row = document.createElement('tr');
+                    row.classList.add('bg-white', 'border-b');
+
+                    const fcfValue = slicedData.freeCashFlow[index];
+                    const ocfValue = slicedData.operatingCashFlow[index];
+                    const capexValue = slicedData.capitalExpenditures[index];
+                    
+                    const formatValue = (value) => {
+                        const formatted = new Intl.NumberFormat('en-US').format(value);
+                        return value < 0 ? `<span class="text-red-600">(${formatted.replace('-', '')})</span>` : `<span class="text-green-600">${formatted}</span>`;
+                    };
+
+                    row.innerHTML = `
+                        <td class="px-4 py-2 sm:px-6 sm:py-4 whitespace-nowrap">${period}</td>
+                        <td class="px-4 py-2 sm:px-6 sm:py-4 whitespace-nowrap">${formatValue(fcfValue)}</td>
+                        <td class="px-4 py-2 sm:px-6 sm:py-4 whitespace-nowrap">${formatValue(ocfValue)}</td>
+                        <td class="px-4 py-2 sm:px-6 sm:py-4 whitespace-nowrap">${formatValue(capexValue)}</td>
+                    `;
+                    dataTableBody.appendChild(row);
+                });
+
+                // تحديث أو إنشاء المخطط
+                if (cashFlowChart) {
+                    cashFlowChart.destroy();
+                }
+
+                const ctx = chartCanvas.getContext('2d');
+                
+                cashFlowChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: slicedData.labels,
+                        datasets: [
+                            {
+                                label: 'التدفق النقدي الحر',
+                                data: slicedData.freeCashFlow,
+                                borderColor: '#30325a',
+                                backgroundColor: 'rgba(48, 50, 90, 0.7)',
+                                fill: true,
+                                tension: 0.4
+                            },
+                            {
+                                label: 'صافي التدفقات النقدية التشغيلية',
+                                data: slicedData.operatingCashFlow,
+                                borderColor: '#a2d8ce',
+                                backgroundColor: 'rgba(162, 216, 206, 0.7)',
+                                fill: true,
+                                tension: 0.4
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: true,
+                                position: 'top',
+                                labels: {
+                                    font: {
+                                        size: 14,
+                                        family: 'Noto Kufi Arabic'
+                                    }
+                                }
+                            },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false,
+                                callbacks: {
+                                    title: function(context) {
+                                        return context[0].label;
+                                    },
+                                    label: function(context) {
+                                        const value = context.parsed.y;
+                                        const formatted = (value / 1000000).toFixed(2);
+                                        return `${context.dataset.label}: ${value < 0 ? `(${Math.abs(formatted)})` : formatted} مليون ريال`;
+                                    },
+                                    footer: function(context) {
+                                        const dataIndex = context[0].dataIndex;
+                                        const capexValue = slicedData.capitalExpenditures[dataIndex];
+                                        const formattedCapex = (capexValue / 1000000).toFixed(2);
+                                        return `النفقات الرأسمالية: ${capexValue < 0 ? `(${Math.abs(formattedCapex)})` : formattedCapex} مليون ريال`;
+                                    }
+                                },
+                                bodyFont: { family: 'Noto Kufi Arabic' },
+                                titleFont: { family: 'Noto Kufi Arabic' },
+                                footerFont: { family: 'Noto Kufi Arabic' }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: false,
+                                ticks: {
+                                    callback: function(value) {
+                                        return (value / 1000000).toFixed(1) + '';
+                                    },
+                                    font: { family: 'Noto Kufi Arabic' }
+                                },
+                                title: {
+                                    display: true,
+                                    text: 'مليون ريال',
+                                    font: { size: 16, family: 'Noto Kufi Arabic' }
+                                }
+                            },
+                            x: {
+                                ticks: { font: { family: 'Noto Kufi Arabic' } },
+                                title: { display: true, text: '', font: { size: 16, family: 'Noto Kufi Arabic' } }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // دالة لعرض المزيد من الفترات (تمدد)
+            function showLessData() {
+                if (currentDataCount > 4) { // الحد الأدنى 4 فترات
+                    currentDataCount -= 2;
+                    updateChartAndTable(currentDataCount);
+                }
+            }
+
+            // دالة لعرض أقل من الفترات (تقلص)
+            function showMoreData() {
+                if (currentDataCount < fullData.labels.length) {
+                    currentDataCount += 2;
+                    updateChartAndTable(currentDataCount);
+                }
+            }
+
+            // إضافة مستمعي الأحداث للأزرار
+            showLessBtn.addEventListener('click', showMoreData); // تم عكس الوظيفة ليتوافق مع التسمية
+            showMoreBtn.addEventListener('click', showLessData); // تم عكس الوظيفة ليتوافق مع التسمية
+            
+            // تهيئة أولية
+            updateChartAndTable(currentDataCount);
+        }
+        
+        initializeChartAndTable();
+    </script>
+</body>
+</html>
